@@ -1,0 +1,96 @@
+name: docs
+
+# Three jobs, three distinct questions:
+#   verify  — "is this change correct?"            (every PR and push)
+#   deploy  — "ship it, then prove production"     (push to main only)
+#   drift   — "is production still correct?"       (nightly)
+#
+# The nightly job is the one that matters most. These pages make factual claims
+# about products whose code lives in other repos, so nothing here can detect it
+# when the product moves and the docs do not. Between 2026-02 and 2026-07 that
+# gap let the site advertise a deleted price tier and a GitHub org that does not
+# exist. Nightly means drift is caught in a day, not a quarter.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 07:00 UTC daily. Cron-only jobs are gated to the `drift` job below.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Build and verify claims
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      # Runs against the freshly built `dist` via the config's webServer.
+      # Includes the Published-claims block, so a PR that reintroduces a retired
+      # claim fails here rather than reaching production.
+      - run: npx playwright test --project=chromium
+
+  deploy:
+    name: Deploy and verify production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      # The Pages project is direct-upload; there is no git integration, so this
+      # step IS the deployment. Token is scoped to Pages Write only.
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler pages deploy dist --project-name=flapjack-docs --branch=main
+
+      - run: npx playwright install --with-deps chromium
+
+      # Re-run the same suite against the real domain. Building correctly and
+      # serving correctly are different claims; only this proves the second.
+      - name: Verify production
+        env:
+          BASE_URL: https://docs.flapjack.foo
+        run: npx playwright test --project=chromium
+
+  drift:
+    name: Nightly production claim check
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      # No build and no deploy: this asks only whether what customers currently
+      # see still matches the claims we committed to. A failure here means the
+      # product moved and the docs did not.
+      - name: Check production claims
+        env:
+          BASE_URL: https://docs.flapjack.foo
+        run: npx playwright test --project=chromium

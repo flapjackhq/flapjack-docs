@@ -1,0 +1,24 @@
+---
+title: Flapjack Documentation
+description: Open-source search engine. Drop-in Algolia replacement.
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Flapjack is an open-source search engine with an Algolia-compatible API. Self-host in 60 seconds or use Flapjack Cloud.
+
+## Quick start
+
+<CardGrid>
+	<LinkCard title="Getting Started" description="Install and run Flapjack in under a minute." href="/getting-started/" />
+	<LinkCard title="Migrate from Algolia" description="Switch from Algolia with minimal code changes." href="/migrate-from-algolia/" />
+	<LinkCard title="API Reference" description="REST API endpoints for search, indexing, and settings." href="/api/overview/" />
+	<LinkCard title="Client Libraries" description="JavaScript, Python, Ruby, Go, PHP, and more." href="/clients/javascript/" />
+</CardGrid>
+
+## What is Flapjack?
+
+- **Algolia-compatible API** — same REST paths, same auth headers, same response format. Point your existing Algolia client at Flapjack and it works.
+- **Self-host anywhere** — single binary, zero dependencies. `docker run` or download and run.
+- **Built on Rust + Tantivy** — fast full-text search with sub-millisecond query times.
+- **Flapjack Cloud** — don't want to manage servers? Flapjack Cloud runs Flapjack for you with zero ops. Free up to 3 indices, 100,000 records, 250 MB storage, and 50,000 searches/month — no credit card required. Beyond the free tier, storage is metered at $0.05/MB/month.
