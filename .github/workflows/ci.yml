@@ -69,9 +69,19 @@ jobs:
 
       # Re-run the same suite against the real domain. Building correctly and
       # serving correctly are different claims; only this proves the second.
-      - name: Verify production
+      # Points at the Pages deployment origin, not docs.flapjack.foo.
+      # GitHub runners could not reach the custom domain (ERR_TIMED_OUT on every
+      # request) while it is reachable from developer machines; the zone runs
+      # browser_check with security_level=medium, and that zone also fronts the
+      # customer app, so relaxing it for CI would weaken production protection
+      # for a docs check. flapjack-docs.pages.dev serves the identical
+      # deployment without the zone proxy, so content drift is still caught.
+      # What this does NOT cover is DNS/proxy misconfiguration of the custom
+      # domain; verify that with the BASE_URL=https://docs.flapjack.foo run
+      # documented in README.md when changing DNS or Pages domain settings.
+      - name: Verify deployed site
         env:
-          BASE_URL: https://docs.flapjack.foo
+          BASE_URL: https://flapjack-docs.pages.dev
         run: npx playwright test --project=chromium
 
   drift:
@@ -90,7 +100,17 @@ jobs:
       # No build and no deploy: this asks only whether what customers currently
       # see still matches the claims we committed to. A failure here means the
       # product moved and the docs did not.
-      - name: Check production claims
+      # Points at the Pages deployment origin, not docs.flapjack.foo.
+      # GitHub runners could not reach the custom domain (ERR_TIMED_OUT on every
+      # request) while it is reachable from developer machines; the zone runs
+      # browser_check with security_level=medium, and that zone also fronts the
+      # customer app, so relaxing it for CI would weaken production protection
+      # for a docs check. flapjack-docs.pages.dev serves the identical
+      # deployment without the zone proxy, so content drift is still caught.
+      # What this does NOT cover is DNS/proxy misconfiguration of the custom
+      # domain; verify that with the BASE_URL=https://docs.flapjack.foo run
+      # documented in README.md when changing DNS or Pages domain settings.
+      - name: Check deployed claims
         env:
-          BASE_URL: https://docs.flapjack.foo
+          BASE_URL: https://flapjack-docs.pages.dev
         run: npx playwright test --project=chromium
