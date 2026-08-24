@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test'
 
+const UNSAFE_MANAGED_CLOUD_TEXT = String.raw`(?:admin(?:istrator)?(?:[ _-](?:key|secret))|FLAPJACK_ADMIN_KEY|YOUR_(?:[A-Z]+_)*IP|YOUR_VM|https?:\/\/(?:\d{1,3}\.){3}\d{1,3}|\b7700\b)`
+
+function unsafeManagedCloudSection(startHeading: string, endHeading: string) {
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(
+    `${escapeRegExp(startHeading)}(?:(?!${escapeRegExp(endHeading)})[\\s\\S])*${UNSAFE_MANAGED_CLOUD_TEXT}`,
+    'i'
+  )
+}
+
 test.describe('Docs site — Home', () => {
   test('home page loads with title', async ({ page }) => {
     await page.goto('/')
@@ -38,6 +48,7 @@ test.describe('Docs site — Getting Started', () => {
     await expect(main).toContainText('https://api.flapjack.foo')
     await expect(main).toContainText('tenant-scoped, search-only credential')
     await expect(main).toContainText('Do not put the tenant token in browser code')
+    await expect(main).not.toContainText(unsafeManagedCloudSection('Managed Cloud', 'Self-hosted'))
   })
 
   test('sidebar navigation is present', async ({ page }) => {
@@ -60,6 +71,9 @@ test.describe('Docs site — Migrate from Algolia', () => {
     await expect(main).toContainText('migration is not only a hostname change')
     await expect(main).toContainText('not a promise that every Algolia endpoint')
     await expect(main).not.toContainText(/drop[- ]in|same code|works unchanged|out of the box/i)
+    await expect(main).not.toContainText(
+      unsafeManagedCloudSection('Managed Cloud migration', 'Self-hosted migration')
+    )
   })
 
   test('migration page has code examples', async ({ page }) => {
@@ -141,6 +155,9 @@ test.describe('Docs site — Guides', () => {
     const main = page.locator('main')
     await expect(main).toContainText('copy the endpoint from Cloud')
     await expect(main).toContainText('search-only key returned by Cloud')
+    await expect(main).not.toContainText(
+      unsafeManagedCloudSection('Managed Cloud connections', 'Self-hosted connections')
+    )
   })
 
   test('troubleshooting guide covers common migration issues', async ({ page }) => {
@@ -194,6 +211,7 @@ test.describe('Docs site — Client Libraries', () => {
     await expect(main).toContainText('tenant-scoped, search-only key')
     await expect(main).toContainText('https://api.flapjack.foo')
     await expect(main).toContainText('Do not ship the tenant token')
+    await expect(main).not.toContainText(unsafeManagedCloudSection('Managed Cloud', 'Self-hosted'))
   })
 
   test('Python client page loads', async ({ page }) => {
