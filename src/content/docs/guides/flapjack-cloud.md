@@ -1,130 +1,113 @@
 ---
 title: Flapjack Cloud
-description: Managed Flapjack hosting. Metered usage-based pricing with a free tier.
+description: Connect safely to managed Flapjack Cloud with hosted tenant routes and scoped credentials.
 ---
 
-Flapjack Cloud runs Flapjack for you on AWS with no infrastructure to manage.
-Sign up, create an index, and start searching — the same Algolia-compatible API
-you get when self-hosting.
+Flapjack Cloud operates Flapjack on managed infrastructure. It exposes a
+hosted control plane for tenant operations and a separate managed search
+endpoint for browser clients. Self-hosted loopback examples elsewhere in these
+docs do not describe Cloud networking or credentials.
 
-## Getting started
+## Current access, pricing, and limits
 
-1. **Sign up** at [cloud.flapjack.foo](https://cloud.flapjack.foo) — no credit card required
-2. **Verify your email** via the link we send you
-3. **Create an index** from the console
-4. **Copy your endpoint and admin key** from the console's Getting Started panel
-5. **Start indexing** with the code snippets shown there
+Use these product-owned pages for access, pricing, and limit facts that can
+change:
 
-## Plans
+- [Current access details](https://cloud.flapjack.foo/beta)
+- [Current prices and limits](https://cloud.flapjack.foo/pricing)
+- [Cloud console](https://cloud.flapjack.foo/console)
 
-Flapjack Cloud is metered — you are billed for what you store, not for a fixed
-instance size.
+This guide deliberately does not copy plan prices, quotas, regions, or support
+targets from those owners.
 
-| Plan | What you get | Cost |
-|------|--------------|------|
-| **Free** | Up to 3 indices, 100,000 records, 250 MB storage, and 50,000 searches/month | $0 — no credit card required |
-| **Shared** | Everything above the free tier | Metered, $5/month minimum |
+## Tenant operations
 
-Beyond the free tier:
-
-- **Storage** — $0.05 per MB per month
-- **Cold storage** — $0.02 per GB per month
-
-Prices are quoted in USD and exclusive of any applicable tax in your
-jurisdiction.
-
-## Regions
-
-Storage rates are multiplied by a per-region factor:
-
-| Region | Location | Multiplier |
-|--------|----------|------------|
-| `us-east-1` | US East (Virginia) | 1.00x |
-| `eu-west-1` | EU West (Ireland) | 1.00x |
-| `us-east-2` | US East (Ashburn) | 0.80x |
-| `us-west-1` | US West (Oregon) | 0.80x |
-| `eu-north-1` | EU North (Helsinki) | 0.75x |
-| `eu-central-1` | EU Central (Germany) | 0.70x |
-
-## Connecting to your instance
-
-Your console shows the two values you need:
-
-- **Endpoint** — the base URL for your instance
-- **Admin key** — the API key for all operations
-
-Use them exactly as shown in the console. Do not hardcode a host or scheme from
-this page — your endpoint is specific to your instance.
-
-### cURL
+The public Cloud control-plane origin is:
 
 ```bash
-# Index a document
-curl -X POST 'YOUR_ENDPOINT/1/indexes/movies/batch' \
-  -H 'X-Algolia-Application-Id: flapjack' \
-  -H 'X-Algolia-API-Key: YOUR_ADMIN_KEY' \
+export API_BASE_URL="https://api.flapjack.foo"
+```
+
+Sign in after following the current access instructions and keep the returned
+tenant token on a trusted server:
+
+```bash
+curl -X POST "$API_BASE_URL/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"replace-with-your-password"}'
+
+export AUTH_TOKEN="<token-from-login-response>"
+```
+
+Create an index with a region currently offered by the console:
+
+```bash
+export INDEX_NAME="movies"
+
+curl -X POST "$API_BASE_URL/indexes" \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"movies","region":"<region-from-console>"}'
+```
+
+Writes and trusted-server searches use tenant-scoped routes:
+
+```bash
+curl -X POST "$API_BASE_URL/indexes/$INDEX_NAME/batch" \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"requests":[{"action":"addObject","body":{"objectID":"1","title":"The Matrix"}}]}'
 
-# Search
-curl -X POST 'YOUR_ENDPOINT/1/indexes/movies/query' \
-  -H 'X-Algolia-Application-Id: flapjack' \
-  -H 'X-Algolia-API-Key: YOUR_ADMIN_KEY' \
+curl -X POST "$API_BASE_URL/indexes/$INDEX_NAME/search" \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"query":"matrix"}'
 ```
 
-### JavaScript
+Do not ship the tenant token in a web or mobile application.
+
+## Browser search credentials
+
+After an index is ready, request a search-only credential with the tenant token
+from a trusted server:
+
+```bash
+curl -X POST "$API_BASE_URL/onboarding/credentials" \
+  -H "Authorization: Bearer $AUTH_TOKEN"
+```
+
+The response provides `endpoint`, `api_key`, and `application_id`. The key is
+restricted to search and browse for the tenant's indexes. Use the endpoint
+exactly as returned only when it is a trusted HTTPS hostname with no explicit
+port. Never replace it with an instance address. If Cloud returns any other
+shape, stop and use the support link maintained on the
+[Cloud beta page](https://cloud.flapjack.foo/beta).
 
 ```js
 import { liteClient as algoliasearch } from 'algoliasearch/lite';
 
-// Read the endpoint host and admin key from your console, then supply them as
-// configuration rather than committing them to source.
-const client = algoliasearch('flapjack', process.env.FLAPJACK_ADMIN_KEY, {
-  hosts: [{ url: process.env.FLAPJACK_HOST }],
+const endpoint = new URL('YOUR_HTTPS_ENDPOINT');
+if (endpoint.protocol !== 'https:' || endpoint.port) {
+  throw new Error('Flapjack Cloud search requires the managed HTTPS origin');
+}
+
+const applicationId = 'YOUR_APPLICATION_ID';
+const searchClient = algoliasearch(applicationId, 'YOUR_SEARCH_ONLY_KEY', {
+  hosts: [{ url: endpoint.host, protocol: 'https', accept: 'readWrite' }],
+  baseHeaders: {
+    Authorization: 'Bearer YOUR_SEARCH_ONLY_KEY',
+  },
 });
 ```
 
-### InstantSearch.js
+Treat this key as public but least-privilege: keep it search-only and scoped to
+the required indexes. Use tenant routes from a trusted server for indexing,
+settings, key management, billing, and account operations.
 
-```js
-import { liteClient as algoliasearch } from 'algoliasearch/lite';
-import instantsearch from 'instantsearch.js';
-import { searchBox, hits } from 'instantsearch.js/es/widgets';
+## Compatibility boundary
 
-const searchClient = algoliasearch('flapjack', process.env.FLAPJACK_ADMIN_KEY, {
-  hosts: [{ url: process.env.FLAPJACK_HOST }],
-});
-
-const search = instantsearch({
-  indexName: 'movies',
-  searchClient,
-});
-
-search.addWidgets([
-  searchBox({ container: '#searchbox' }),
-  hits({ container: '#hits' }),
-]);
-
-search.start();
-```
-
-## Console features
-
-The Flapjack Cloud console shows:
-
-- **Indices** — create, browse, configure, and delete indices
-- **Usage** — daily and monthly search requests, write operations, and storage
-- **API keys** — your admin key and any preview keys you create
-- **Billing** — current usage, estimated bill, invoices, and payment method
-- **Logs** — recent API activity
-
-## Billing
-
-- Billed monthly against metered usage
-- The free tier requires no payment method
-- Add or update a card under **Billing → Payment method** in the console
-- Invoices are listed under **Billing → Invoices**
-- Manage your saved payment method through the Stripe customer portal, linked
-  from the console
+Flapjack implements a useful Algolia-compatible search surface, not every
+Algolia product or workflow. Ranking, supported parameters, migration fidelity,
+credential handling, and operational behavior can differ. Evaluate your exact
+queries and widgets before cutover; the [migration guide](/migrate-from-algolia/)
+lists the required checks.
