@@ -229,13 +229,22 @@ test.describe('Docs site — Client Libraries', () => {
 test.describe('Docs site — Navigation', () => {
   test('sidebar link points to correct page', async ({ page }) => {
     await page.goto('/getting-started/')
-    const sidebar = page.locator('nav[aria-label="Main"]')
-    const link = sidebar.getByRole('link', { name: 'Overview' })
+    const sidebar = page.getByRole('navigation', { name: 'Main' })
+    const link = sidebar.getByRole('link', { name: 'Flapjack Cloud', exact: true })
     await expect(link).toBeVisible()
-    await expect(link).toHaveAttribute('href', /\/api\/overview/)
-    // Navigate directly (ViewTransitions unreliable on static serve)
-    await page.goto('/api/overview/')
-    await expect(page.locator('h1')).toContainText('API Overview')
+    await expect(link).toHaveAttribute('href', '/guides/flapjack-cloud/')
+    await link.click()
+
+    await expect(page).toHaveURL(/\/guides\/flapjack-cloud\/$/)
+    const main = page.getByRole('main')
+    await expect(
+      main.getByRole('heading', { name: 'Flapjack Cloud', exact: true, level: 1 }),
+    ).toBeVisible()
+    await expect(
+      main.getByRole('heading', { name: 'Current access, pricing, and limits', exact: true }),
+    ).toBeVisible()
+    await expect(main).toContainText('https://api.flapjack.foo')
+    await expect(main).toContainText('/onboarding/credentials')
   })
 
   test('all pages are accessible (no 404)', async ({ page }) => {
