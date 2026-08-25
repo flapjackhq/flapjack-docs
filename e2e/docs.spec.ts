@@ -1,5 +1,15 @@
 import { test, expect } from '@playwright/test'
 
+const UNSAFE_MANAGED_CLOUD_TEXT = String.raw`(?:admin(?:istrator)?(?:[ _-](?:key|secret))|FLAPJACK_ADMIN_KEY|YOUR_(?:[A-Z]+_)*IP|YOUR_VM|https?:\/\/(?:\d{1,3}\.){3}\d{1,3}|\b7700\b)`
+
+function unsafeManagedCloudSection(startHeading: string, endHeading: string) {
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(
+    `${escapeRegExp(startHeading)}(?:(?!${escapeRegExp(endHeading)})[\\s\\S])*${UNSAFE_MANAGED_CLOUD_TEXT}`,
+    'i'
+  )
+}
+
 test.describe('Docs site — Home', () => {
   test('home page loads with title', async ({ page }) => {
     await page.goto('/')
@@ -32,8 +42,13 @@ test.describe('Docs site — Getting Started', () => {
   test('getting started page loads with content', async ({ page }) => {
     await page.goto('/getting-started/')
     await expect(page.locator('h1')).toContainText('Getting Started')
-    // Page has a "Quick start with Docker" section
-    await expect(page.getByRole('heading', { name: /Docker/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Managed Cloud' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main).toContainText('https://api.flapjack.foo')
+    await expect(main).toContainText('tenant-scoped, search-only credential')
+    await expect(main).toContainText('Do not put the tenant token in browser code')
+    await expect(main).not.toContainText(unsafeManagedCloudSection('Managed Cloud', 'Self-hosted'))
   })
 
   test('sidebar navigation is present', async ({ page }) => {
@@ -52,6 +67,13 @@ test.describe('Docs site — Migrate from Algolia', () => {
     await page.goto('/migrate-from-algolia/')
     await expect(page.locator('h1')).toContainText('Migrate from Algolia')
     await expect(page.getByRole('heading', { name: /Compatibility/i })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main).toContainText('migration is not only a hostname change')
+    await expect(main).toContainText('not a promise that every Algolia endpoint')
+    await expect(main).not.toContainText(/drop[- ]in|same code|works unchanged|out of the box/i)
+    await expect(main).not.toContainText(
+      unsafeManagedCloudSection('Managed Cloud migration', 'Self-hosted migration')
+    )
   })
 
   test('migration page has code examples', async ({ page }) => {
@@ -63,34 +85,34 @@ test.describe('Docs site — Migrate from Algolia', () => {
     await page.goto('/migrate-from-algolia/')
     await expect(page.getByRole('heading', { name: /Export from Algolia/i })).toBeVisible()
     const content = page.locator('main')
-    await expect(content).toContainText('Algolia Dashboard')
-    await expect(content).toContainText('browseObjects')
+    await expect(content).toContainText('algolia objects browse')
+    await expect(content).toContainText('settings.json')
   })
 
   test('migration page has What\'s different section', async ({ page }) => {
     await page.goto('/migrate-from-algolia/')
     await expect(page.getByRole('heading', { name: /What.*different/i })).toBeVisible()
     const content = page.locator('main')
-    await expect(content).toContainText('Application ID')
-    await expect(content).toContainText('Single admin key')
-    await expect(content).toContainText('Tantivy')
+    await expect(content).toContainText('Deployment and credentials')
+    await expect(content).toContainText('Ranking and settings')
+    await expect(content).toContainText('Migration fidelity')
   })
 
-  test('migration page has search parameters table', async ({ page }) => {
+  test('migration page has a compatibility checklist', async ({ page }) => {
     await page.goto('/migrate-from-algolia/')
-    await expect(page.getByRole('heading', { name: /Search parameters/i })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Compatibility checklist/i })).toBeVisible()
     const content = page.locator('main')
-    await expect(content).toContainText('typoTolerance')
-    await expect(content).toContainText('facetFilters')
-    await expect(content).toContainText('hitsPerPage')
+    await expect(content).toContainText('Ranking')
+    await expect(content).toContainText('Filtering')
+    await expect(content).toContainText('Faceting')
   })
 
   test('migration page has verification checklist', async ({ page }) => {
     await page.goto('/migrate-from-algolia/')
     const content = page.locator('main')
     await expect(content).toContainText('Verification checklist')
-    await expect(content).toContainText('Record count matches')
-    await expect(content).toContainText('Highlighting works')
+    await expect(content).toContainText('record counts')
+    await expect(content).toContainText('highlighting')
   })
 })
 
@@ -104,6 +126,16 @@ test.describe('Docs site — Guides', () => {
   test('Flapjack Cloud guide loads', async ({ page }) => {
     await page.goto('/guides/flapjack-cloud/')
     await expect(page.locator('h1')).toContainText('Flapjack Cloud')
+    const main = page.locator('main')
+    await expect(main).toContainText('https://api.flapjack.foo')
+    await expect(main).toContainText('/onboarding/credentials')
+    await expect(main).toContainText('search-only credential')
+    await expect(main).toContainText('trusted HTTPS hostname with no explicit port')
+    await expect(main).not.toContainText(
+      /admin key|admin_key|YOUR_ADMIN_KEY|FLAPJACK_ADMIN_KEY/i
+    )
+    await expect(main).not.toContainText(/YOUR_(?:INSTANCE_)?IP|https?:\/\/(?:\d{1,3}\.){3}\d{1,3}/i)
+    await expect(main).not.toContainText(':7700')
   })
 
   test('InstantSearch guide loads', async ({ page }) => {
@@ -116,14 +148,22 @@ test.describe('Docs site — Guides', () => {
   test('troubleshooting guide loads', async ({ page }) => {
     await page.goto('/guides/troubleshooting/')
     await expect(page.locator('h1')).toContainText('Troubleshooting')
+    await expect(page.getByRole('heading', { name: 'Managed Cloud connections' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Self-hosted connections' })).toBeVisible()
     await expect(page.getByRole('heading', { name: /Connection refused/i })).toBeVisible()
     await expect(page.getByRole('heading', { name: /Invalid API key/i })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main).toContainText('copy the endpoint from Cloud')
+    await expect(main).toContainText('search-only key returned by Cloud')
+    await expect(main).not.toContainText(
+      unsafeManagedCloudSection('Managed Cloud connections', 'Self-hosted connections')
+    )
   })
 
   test('troubleshooting guide covers common migration issues', async ({ page }) => {
     await page.goto('/guides/troubleshooting/')
     const content = page.locator('main')
-    await expect(content).toContainText('SSL')
+    await expect(content).toContainText('TLS')
     await expect(content).toContainText('InstantSearch')
     await expect(content).toContainText('Batch import')
     await expect(content).toContainText('Python')
@@ -165,6 +205,13 @@ test.describe('Docs site — Client Libraries', () => {
     await page.goto('/clients/javascript/')
     await expect(page.locator('h1')).toContainText('JavaScript Client')
     await expect(page.locator('pre code').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Managed Cloud' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
+    const main = page.locator('main')
+    await expect(main).toContainText('tenant-scoped, search-only key')
+    await expect(main).toContainText('https://api.flapjack.foo')
+    await expect(main).toContainText('Do not ship the tenant token')
+    await expect(main).not.toContainText(unsafeManagedCloudSection('Managed Cloud', 'Self-hosted'))
   })
 
   test('Python client page loads', async ({ page }) => {
@@ -182,13 +229,22 @@ test.describe('Docs site — Client Libraries', () => {
 test.describe('Docs site — Navigation', () => {
   test('sidebar link points to correct page', async ({ page }) => {
     await page.goto('/getting-started/')
-    const sidebar = page.locator('nav[aria-label="Main"]')
-    const link = sidebar.getByRole('link', { name: 'Overview' })
+    const sidebar = page.getByRole('navigation', { name: 'Main' })
+    const link = sidebar.getByRole('link', { name: 'Flapjack Cloud', exact: true })
     await expect(link).toBeVisible()
-    await expect(link).toHaveAttribute('href', /\/api\/overview/)
-    // Navigate directly (ViewTransitions unreliable on static serve)
-    await page.goto('/api/overview/')
-    await expect(page.locator('h1')).toContainText('API Overview')
+    await expect(link).toHaveAttribute('href', '/guides/flapjack-cloud/')
+    await link.click()
+
+    await expect(page).toHaveURL(/\/guides\/flapjack-cloud\/$/)
+    const main = page.getByRole('main')
+    await expect(
+      main.getByRole('heading', { name: 'Flapjack Cloud', exact: true, level: 1 }),
+    ).toBeVisible()
+    await expect(
+      main.getByRole('heading', { name: 'Current access, pricing, and limits', exact: true }),
+    ).toBeVisible()
+    await expect(main).toContainText('https://api.flapjack.foo')
+    await expect(main).toContainText('/onboarding/credentials')
   })
 
   test('all pages are accessible (no 404)', async ({ page }) => {
@@ -251,13 +307,9 @@ test.describe('Docs site — Search & Theme', () => {
 const PRODUCT_CLAIMS = {
   // MARKETING_PRICING.storage_rate_per_mb_month
   storageRatePerMbMonth: '$0.05',
-  // MARKETING_PRICING.free_tier_* — the four free-tier limits
-  freeTierIndices: '3',
-  freeTierRecords: '100,000',
-  freeTierStorage: '250 MB',
-  freeTierSearches: '50,000',
-  // Customer-facing signup host (cloud.flapjack.foo serves it; app.flapjack.foo does not resolve)
-  signupHost: 'cloud.flapjack.foo',
+  // Product-owned mutable Cloud surfaces.
+  cloudPricingUrl: 'https://cloud.flapjack.foo/pricing',
+  cloudAccessUrl: 'https://cloud.flapjack.foo/beta',
   // engine/install.sh REPO — the canonical public OSS repo and GHCR namespace
   githubOrg: 'flapjackhq',
 } as const
@@ -388,24 +440,21 @@ test.describe('Docs site — Published claims', () => {
     await expect(main).toContainText(PRODUCT_CLAIMS.storageRatePerMbMonth)
   })
 
-  test('cloud guide free tier matches the pricing SSOT', async ({ page }) => {
+  test('cloud guide links to the pricing SSOT instead of copying volatile values', async ({ page }) => {
     await page.goto('/guides/flapjack-cloud/')
     const main = page.locator('main')
-    await expect(main).toContainText(PRODUCT_CLAIMS.freeTierIndices)
-    await expect(main).toContainText(PRODUCT_CLAIMS.freeTierRecords)
-    await expect(main).toContainText(PRODUCT_CLAIMS.freeTierStorage)
-    await expect(main).toContainText(PRODUCT_CLAIMS.freeTierSearches)
-    await expect(main).toContainText(PRODUCT_CLAIMS.storageRatePerMbMonth)
+    const pricingLink = page.getByRole('link', { name: 'Current prices and limits', exact: true })
+    await expect(pricingLink).toBeVisible()
+    await expect(pricingLink).toHaveAttribute('href', PRODUCT_CLAIMS.cloudPricingUrl)
+    await expect(main).not.toContainText('$0.05')
+    await expect(main).not.toContainText('100,000')
+    await expect(main).not.toContainText('250 MB')
   })
 
-  test('cloud guide sends users to the live signup host', async ({ page }) => {
+  test('cloud guide sends users to the current access owner', async ({ page }) => {
     await page.goto('/guides/flapjack-cloud/')
-    const signupLink = page.locator('main').getByRole('link', {
-      name: PRODUCT_CLAIMS.signupHost,
-    })
-    await expect(signupLink).toHaveAttribute(
-      'href',
-      new RegExp(PRODUCT_CLAIMS.signupHost.replace(/\./g, '\\.'))
-    )
+    const accessLink = page.getByRole('link', { name: 'Current access details', exact: true })
+    await expect(accessLink).toBeVisible()
+    await expect(accessLink).toHaveAttribute('href', PRODUCT_CLAIMS.cloudAccessUrl)
   })
 })
